@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChatGPT Context Saver</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+
+<body>
+  <div class="container">
+    <h1>💬 ChatGPT Saver</h1>
+    <p class="description">Сохраните ваш чат в файл для продолжения в новой беседе</p>
+
+    <div class="input-group">
+      <label for="filename">Имя файла:</label>
+      <input type="text" id="filename" placeholder="chatgpt_context">
+    </div>
+
+    <div class="input-group">
+      <label for="format">Формат:</label>
+      <select id="format">
+        <option value="txt">📄 TXT (текст)</option>
+        <option value="md">📝 MD (Markdown)</option>
+        <option value="pdf">📕 PDF (документ)</option>
+      </select>
+    </div>
+
+    <button id="saveBtn" class="save-btn">
+      <span class="btn-icon">📥</span>
+      Сохранить чат
+    </button>
+
+    <div id="status" class="status hidden"></div>
+
+    <div class="footer">
+      <small>Откройте ChatGPT и нажмите кнопку для экспорта</small>
+    </div>
+  </div>
+
+  <script src="../lib/pdfmake.min.js"></script>
+  <script src="../lib/vfs_fonts_custom.js"></script>
+  <script src="popup.js"></script>
+</body>
+
+</html>
