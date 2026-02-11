@@ -13,6 +13,15 @@
                 console.error('ChatGPT Context Saver Error:', error);
                 sendResponse({ error: error.message });
             }
+        } else if (request.action === 'getChatInfo') {
+            try {
+                const title = getChatTitle();
+                const messageCount = document.querySelectorAll('[data-message-author-role]').length;
+                sendResponse({ title: title, messageCount: messageCount });
+            } catch (error) {
+                console.error('ChatGPT Context Saver Error:', error);
+                sendResponse({ title: '', messageCount: 0 });
+            }
         } else if (request.action === 'getChatTitle') {
             try {
                 const title = getChatTitle();
@@ -27,26 +36,37 @@
 
     function getChatTitle() {
         // Try to get the chat title from the page
-        // The title is usually in the document title or in a specific element
 
-        // Method 1: Get from document title (format: "Chat title — ChatGPT")
+        // Method 1: Get from document title (various formats)
+        // "Chat title — ChatGPT", "Chat title - ChatGPT", "Chat title | ChatGPT"
         const docTitle = document.title;
-        if (docTitle && docTitle !== 'ChatGPT') {
-            // Remove the " — ChatGPT" or " - ChatGPT" suffix
-            const cleanTitle = docTitle.replace(/\s*[—–-]\s*ChatGPT\s*$/i, '').trim();
-            if (cleanTitle && cleanTitle !== 'ChatGPT') {
+        if (docTitle && docTitle !== 'ChatGPT' && docTitle !== 'New chat' && docTitle !== 'Новый чат') {
+            const cleanTitle = docTitle
+                .replace(/\s*[—–\-|]\s*ChatGPT\s*$/i, '')
+                .replace(/\s*[—–\-|]\s*OpenAI\s*$/i, '')
+                .trim();
+            if (cleanTitle && cleanTitle !== 'ChatGPT' && cleanTitle !== 'New chat' && cleanTitle !== 'Новый чат') {
                 return sanitizeFilename(cleanTitle);
             }
         }
 
-        // Method 2: Try to find the active chat item in the sidebar
-        const activeChat = document.querySelector('nav [class*="active"] a') ||
-            document.querySelector('nav li[class*="active"]') ||
-            document.querySelector('[data-testid="conversation-turn-1"]');
+        // Method 2: Try to find the active/selected chat title in the sidebar
+        const activeChat = document.querySelector('nav a[class*="bg-"]') ||
+            document.querySelector('nav [class*="active"] a') ||
+            document.querySelector('nav li[class*="active"]');
 
         if (activeChat) {
             const text = activeChat.textContent?.trim();
-            if (text) {
+            if (text && text !== 'New chat' && text !== 'Новый чат') {
+                return sanitizeFilename(text);
+            }
+        }
+
+        // Method 3: Get title from the first heading in the chat
+        const h1 = document.querySelector('main h1');
+        if (h1) {
+            const text = h1.textContent?.trim();
+            if (text && text.length > 2 && text.length < 100) {
                 return sanitizeFilename(text);
             }
         }
