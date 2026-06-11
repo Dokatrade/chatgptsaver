@@ -16,7 +16,7 @@
         } else if (request.action === 'getChatInfo') {
             try {
                 const title = getChatTitle();
-                const messageCount = document.querySelectorAll('[data-message-author-role]').length;
+                const messageCount = getVisibleMessageGroups().length;
                 sendResponse({ title: title, messageCount: messageCount });
             } catch (error) {
                 console.error('ChatGPT Context Saver Error:', error);
@@ -84,6 +84,85 @@
             .replace(/_+$/, '');          // Remove trailing underscores
     }
 
+    function isVisibleElement(element) {
+        const rect = element.getBoundingClientRect();
+        const style = window.getComputedStyle(element);
+
+        return rect.width > 0 &&
+            rect.height > 0 &&
+            style.display !== 'none' &&
+            style.visibility !== 'hidden' &&
+            style.opacity !== '0';
+    }
+
+    function normalizeRole(role) {
+        if (role === 'user' || role === 'assistant') {
+            return role;
+        }
+
+        return null;
+    }
+
+    function getMessageContentArea(element) {
+        return element.querySelector('.markdown') ||
+            element.querySelector('[data-message-content]') ||
+            element.querySelector('[class*="prose"]') ||
+            element.querySelector('.whitespace-pre-wrap') ||
+            element;
+    }
+
+    function removeNonContentElements(clone) {
+        const selectors = [
+            'button',
+            'svg',
+            'menu',
+            'form',
+            'input',
+            'textarea',
+            'select',
+            '[role="button"]',
+            '[aria-hidden="true"]',
+            '[data-testid*="copy"]',
+            '[data-testid*="feedback"]',
+            '[data-testid*="share"]',
+            '[data-testid*="voice"]',
+            '[class*="copy"]',
+            '[class*="feedback"]',
+            '[class*="sr-only"]'
+        ];
+
+        clone.querySelectorAll(selectors.join(', ')).forEach(el => el.remove());
+    }
+
+    function escapeMarkdownLinkText(text) {
+        return text.replace(/([\[\]\\])/g, '\\$1').trim();
+    }
+
+    function escapeMarkdownUrl(url) {
+        return url.replace(/\)/g, '%29').trim();
+    }
+
+    function normalizeLinkUrl(href) {
+        const cleanedHref = href?.trim() || '';
+        const lowerHref = cleanedHref.toLowerCase();
+
+        if (!cleanedHref || cleanedHref.startsWith('#') || lowerHref.startsWith('javascript:')) {
+            return '';
+        }
+
+        try {
+            return new URL(cleanedHref, window.location.href).href;
+        } catch (error) {
+            return cleanedHref;
+        }
+    }
+
+    function getVisibleMessageGroups() {
+        return Array.from(document.querySelectorAll('[data-message-author-role]'))
+            .filter(group => normalizeRole(group.getAttribute('data-message-author-role')))
+            .filter(isVisibleElement);
+    }
+
     function extractAllMessages() {
         const messages = [];
 
@@ -91,17 +170,21 @@
         // Main approach: find all message containers
 
         // Selector for message groups (each contains user or assistant message)
-        const messageGroups = document.querySelectorAll('[data-message-author-role]');
+        const messageGroups = getVisibleMessageGroups();
 
         if (messageGroups.length > 0) {
             // Modern ChatGPT structure with data attributes
             messageGroups.forEach(group => {
-                const role = group.getAttribute('data-message-author-role');
+                if (!isVisibleElement(group)) return;
+
+                const role = normalizeRole(group.getAttribute('data-message-author-role'));
+                if (!role) return;
+
                 const content = extractTextContent(group);
 
                 if (content.trim()) {
                     messages.push({
-                        role: role === 'user' ? 'user' : 'assistant',
+                        role: role,
                         content: content.trim()
                     });
                 }
@@ -117,13 +200,12 @@
 
     function extractTextContent(element) {
         // Get the main content area within the message
-        const contentArea = element.querySelector('.markdown') ||
-            element.querySelector('[class*="prose"]') ||
-            element.querySelector('.whitespace-pre-wrap') ||
-            element;
+        const contentArea = getMessageContentArea(element);
 
         // Clone to avoid modifying the DOM
         const clone = contentArea.cloneNode(true);
+
+        removeNonContentElements(clone);
 
         // Handle code blocks specially
         const codeBlocks = clone.querySelectorAll('pre');
@@ -140,6 +222,16 @@
             const level = parseInt(h.tagName[1]);
             const prefix = '#'.repeat(level) + ' ';
             h.textContent = `\n${prefix}${h.textContent}\n`;
+        });
+
+        // Handle links as Markdown before reading text content
+        const links = clone.querySelectorAll('a[href]');
+        links.forEach(link => {
+            const url = normalizeLinkUrl(link.getAttribute('href'));
+            const text = link.textContent?.replace(/\s+/g, ' ').trim();
+            if (!url || !text) return;
+
+            link.textContent = `[${escapeMarkdownLinkText(text)}](${escapeMarkdownUrl(url)})`;
         });
 
         // Handle paragraphs - add spacing between them
@@ -288,25 +380,27 @@
     function extractMessagesAlternative() {
         const messages = [];
 
-        // Try to find conversation turns by looking for common patterns
-        // This is a fallback for when the data attributes aren't available
+        // Try structured turn containers before falling back to loose DOM traversal.
+        const turnSelectors = [
+            'article[data-testid^="conversation-turn"]',
+            '[data-testid^="conversation-turn"]',
+            'main article'
+        ];
+        const turnElements = Array.from(document.querySelectorAll(turnSelectors.join(', ')))
+            .filter((element, index, self) => self.indexOf(element) === index)
+            .filter((element, index, self) => !self.some((other, otherIndex) => otherIndex < index && other.contains(element)))
+            .filter(isVisibleElement);
 
-        // Look for article elements or divs with specific classes
-        const articles = document.querySelectorAll('article, [class*="message"], [class*="turn"]');
+        turnElements.forEach((turn, index) => {
+            const role = detectRoleFromTurn(turn, index);
+            const content = extractTextContent(turn);
 
-        articles.forEach(article => {
-            const text = article.innerText || article.textContent || '';
-            if (!text.trim()) return;
-
-            // Try to determine if user or assistant based on styling or position
-            const isUser = article.classList.contains('user') ||
-                article.querySelector('[class*="user"]') ||
-                article.getAttribute('data-role') === 'user';
-
-            messages.push({
-                role: isUser ? 'user' : 'assistant',
-                content: text.trim()
-            });
+            if (role && content.trim()) {
+                messages.push({
+                    role: role,
+                    content: content.trim()
+                });
+            }
         });
 
         // If still no messages, try the main chat container
@@ -320,11 +414,13 @@
                 let isUserTurn = true;
 
                 children.forEach(child => {
-                    const text = child.innerText || child.textContent || '';
-                    if (text.trim() && text.length > 10) {
+                    if (!isVisibleElement(child)) return;
+
+                    const content = extractTextContent(child);
+                    if (content.trim() && content.length > 10) {
                         messages.push({
                             role: isUserTurn ? 'user' : 'assistant',
-                            content: text.trim()
+                            content: content.trim()
                         });
                         isUserTurn = !isUserTurn;
                     }
@@ -333,6 +429,32 @@
         }
 
         return messages;
+    }
+
+    function detectRoleFromTurn(turn, index) {
+        const explicitRole = normalizeRole(turn.getAttribute('data-message-author-role')) ||
+            normalizeRole(turn.getAttribute('data-role')) ||
+            normalizeRole(turn.querySelector('[data-message-author-role]')?.getAttribute('data-message-author-role')) ||
+            normalizeRole(turn.querySelector('[data-role]')?.getAttribute('data-role'));
+
+        if (explicitRole) {
+            return explicitRole;
+        }
+
+        const ariaLabel = turn.getAttribute('aria-label')?.toLowerCase() || '';
+        const testId = turn.getAttribute('data-testid')?.toLowerCase() || '';
+        const className = typeof turn.className === 'string' ? turn.className.toLowerCase() : '';
+        const markerText = `${ariaLabel} ${testId} ${className}`;
+
+        if (/\b(user|you|пользователь|вы)\b/.test(markerText)) {
+            return 'user';
+        }
+
+        if (/\b(assistant|chatgpt|ассистент)\b/.test(markerText)) {
+            return 'assistant';
+        }
+
+        return index % 2 === 0 ? 'user' : 'assistant';
     }
 
     console.log('ChatGPT Context Saver: Content script loaded');

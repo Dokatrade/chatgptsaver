@@ -1,63 +1,66 @@
-# 🤖 Agents — карта правил репозитория
+# Project Instructions
 
-> **ChatGPT Context Saver** — Chrome-расширение (Manifest V3) для сохранения контекста длинных бесед ChatGPT в TXT/PDF.
+## Project
 
-## Стек
+ChatGPT Context Saver is a Chrome extension (Manifest V3) for saving long ChatGPT conversations to TXT, Markdown, or PDF.
 
-`JavaScript (vanilla ES6+)` · `HTML/CSS` · `Chrome Extensions API` · `pdfmake` · `Noto Emoji`
+Stack: vanilla JavaScript, HTML/CSS, Chrome Extensions API, pdfmake, Noto Emoji.
 
----
+## Memory files
 
-## 📖 Карта документации
+This project uses file-based memory.
 
-### 🏗️ [Архитектура](docs/architecture.md)
-Компоненты расширения, поток данных между popup / content script / background, используемые Chrome API. **Читать первым** для понимания структуры проекта.
+Before substantial work, read:
 
-### 📐 [Стиль кода](docs/code-style.md)
-Форматирование, именование переменных/функций, структура файлов, правила комментирования, работа с DOM и обработка ошибок.
+- project-memory/HANDOFF.md
+- project-memory/TODO.md
+- project-memory/decisions.md
+- project-memory/chat-notes.md
 
-### 🔀 [Git-воркфлоу](docs/git-workflow.md)
-Формат коммитов (Conventional Commits), стратегия ветвления, правила `.gitignore`, порядок создания коммитов.
+## File roles
 
-### 🧪 [Тестирование](docs/testing.md)
-Ручное тестирование в Chrome, чек-листы проверки каждого компонента, отладка через DevTools, типичные проблемы и решения.
+- AGENTS.md = short instruction file and map for Codex.
+- project-memory/HANDOFF.md = current project state.
+- project-memory/TODO.md = current task queue.
+- project-memory/decisions.md = important decisions.
+- project-memory/chat-notes.md = compressed notes from chats.
 
-### 📦 [Зависимости](docs/dependencies.md)
-npm-пакеты, библиотеки в `lib/`, шрифты Noto Emoji, правила обновления зависимостей, пересборка VFS-шрифтов.
+## Documentation map
 
-### 🚀 [Сборка и деплой](docs/deployment.md)
-Локальная установка, обновление расширения, версионирование (SemVer), подготовка архива для Chrome Web Store.
+Before code changes, read the relevant docs:
 
----
+- docs/architecture.md = extension architecture and data flow.
+- docs/code-style.md = formatting, naming, DOM, comments, errors.
+- docs/git-workflow.md = Conventional Commits and repository workflow.
+- docs/testing.md = manual Chrome testing checklist and debugging notes.
+- docs/dependencies.md = npm packages, local libraries, fonts, VFS rebuild rules.
+- docs/deployment.md = local install, versioning, archive preparation.
 
-## 🗂️ Структура проекта
+## Language
 
-```
-chatgptsaver/
-├── agents.md              ← вы здесь
-├── docs/                  ← правила и гайдлайны
-│   ├── architecture.md
-│   ├── code-style.md
-│   ├── git-workflow.md
-│   ├── testing.md
-│   ├── dependencies.md
-│   └── deployment.md
-├── manifest.json          ← конфигурация расширения
-├── background/            ← service worker
-├── content/               ← content scripts (DOM-извлечение)
-├── popup/                 ← UI расширения
-├── lib/                   ← runtime-библиотеки
-├── icons/                 ← иконки расширения
-└── package.json           ← npm-конфигурация
-```
+Answer in English unless the user explicitly asks for another language.
 
----
+## Work rules
 
-## ⚡ Быстрый старт для агента
+- Do not rewrite unrelated files.
+- Preserve the existing project style.
+- Before changing code, inspect the existing structure.
+- Prefer small, reviewable changes.
+- Run relevant checks after code changes when possible.
+- Do not add new production dependencies without explicit approval.
+- Do not delete files unless the user clearly requested it.
 
-1. Прочитай **[architecture.md](docs/architecture.md)** — пойми, как устроено расширение
-2. Прочитай **[code-style.md](docs/code-style.md)** — соблюдай стиль кода проекта
-3. Прочитай **[git-workflow.md](docs/git-workflow.md)** — следуй конвенциям коммитов
-4. Перед отправкой изменений — пройди чек-лист из **[testing.md](docs/testing.md)**
-5. При работе с зависимостями — сверяйся с **[dependencies.md](docs/dependencies.md)**
-6. При подготовке релиза — следуй **[deployment.md](docs/deployment.md)**
+## After substantial work
+
+After every substantial change, improvement, refactor, fix, setup step, or completed task:
+
+- Update project-memory/HANDOFF.md if the current state, architecture, setup, workflow, or important context changed.
+- Update project-memory/TODO.md if tasks were added, completed, removed, reprioritized, or clarified.
+- Add a short entry to project-memory/decisions.md if an important technical, architectural, workflow, dependency, deployment, or tooling decision was made.
+- Add a compressed summary to project-memory/chat-notes.md if the conversation produced useful context for future Codex sessions.
+
+Do not update memory files for trivial changes that do not affect project state, tasks, decisions, or future context.
+
+Keep all memory updates short, factual, and useful.
+Do not paste full chats.
+Do not invent project history.

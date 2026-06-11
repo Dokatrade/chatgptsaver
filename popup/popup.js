@@ -27,12 +27,57 @@ document.addEventListener('DOMContentLoaded', async () => {
         return `${name}_${dateStr}${countSuffix}`;
     }
 
+    // Normalize user-provided filenames before passing them to Chrome downloads
+    function sanitizeFilename(name) {
+        const sanitized = name
+            .trim()
+            .replace(/[<>:"/\\|?*\x00-\x1F]/g, '')
+            .replace(/\s+/g, '_')
+            .replace(/^\.+/, '')
+            .replace(/\.+$/, '')
+            .substring(0, 80)
+            .replace(/_+$/, '');
+
+        return sanitized || 'chatgpt_context';
+    }
+
+    function buildDownloadFilename(filename, extension) {
+        const baseName = sanitizeFilename(filename).replace(/\.(txt|md|pdf)$/i, '');
+        return `${baseName}.${extension}`;
+    }
+
+    function isChatGPTTab(tab) {
+        return tab?.url && (tab.url.includes('chatgpt.com') || tab.url.includes('chat.openai.com'));
+    }
+
+    function isMissingReceiverError(error) {
+        return error?.message?.includes('Receiving end does not exist') ||
+            error?.message?.includes('Could not establish connection');
+    }
+
+    async function sendMessageToContentScript(tabId, message) {
+        try {
+            return await chrome.tabs.sendMessage(tabId, message);
+        } catch (error) {
+            if (!isMissingReceiverError(error)) {
+                throw error;
+            }
+
+            await chrome.scripting.executeScript({
+                target: { tabId: tabId },
+                files: ['content/content.js']
+            });
+
+            return chrome.tabs.sendMessage(tabId, message);
+        }
+    }
+
     // Always set a filename value (not just placeholder)
     let chatInfoLoaded = false;
     try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tab.url && (tab.url.includes('chatgpt.com') || tab.url.includes('chat.openai.com'))) {
-            const response = await chrome.tabs.sendMessage(tab.id, { action: 'getChatInfo' });
+        if (isChatGPTTab(tab)) {
+            const response = await sendMessageToContentScript(tab.id, { action: 'getChatInfo' });
             if (response) {
                 const rawTitle = response.title || '';
                 const msgCount = response.messageCount || 0;
@@ -84,15 +129,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         return content;
     }
 
-    async function downloadAsText(content, filename, extension) {
-        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    async function downloadBlob(blob, filename, extension) {
         const url = URL.createObjectURL(blob);
 
-        await chrome.downloads.download({
-            url: url,
-            filename: `${filename}.${extension}`,
-            saveAs: true
-        });
+        try {
+            await chrome.downloads.download({
+                url: url,
+                filename: buildDownloadFilename(filename, extension),
+                saveAs: true
+            });
+        } finally {
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+        }
+    }
+
+    async function downloadAsText(content, filename, extension) {
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        await downloadBlob(blob, filename, extension);
     }
 
     function escapeHtml(text) {
@@ -176,6 +229,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         return result;
     }
 
+    function unescapeMarkdownLinkText(text) {
+        return text.replace(/\\([\[\]\\])/g, '$1');
+    }
+
     // Helper function to parse text lines (headings, paragraphs, inline markdown)
     function parseTextLines(text, baseStyle) {
         const segments = [];
@@ -220,8 +277,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     citationSource = citationMatch[3];
                 }
 
-                // Parse inline markdown: **bold**, *italic*, `code`
-                const markdownRegex = /(\*\*(.+?)\*\*)|(\*(.+?)\*)|(`(.+?)`)/g;
+                // Parse inline markdown: links, **bold**, *italic*, `code`
+                const markdownRegex = /(\[([^\]]+)\]\(([^)]+)\))|(\*\*(.+?)\*\*)|(\*(.+?)\*)|(`(.+?)`)/g;
 
                 let lastIndex = 0;
                 let match;
@@ -233,15 +290,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
 
                     if (match[1]) {
+                        // Link: [text](url)
+                        segments.push(...parseEmojisInText(unescapeMarkdownLinkText(match[2]), {
+                            ...baseStyle,
+                            link: match[3],
+                            color: '#0969da',
+                            decoration: 'underline'
+                        }));
+                    } else if (match[4]) {
                         // Bold: **text**
-                        segments.push(...parseEmojisInText(match[2], { ...baseStyle, bold: true }));
-                    } else if (match[3]) {
+                        segments.push(...parseEmojisInText(match[5], { ...baseStyle, bold: true }));
+                    } else if (match[6]) {
                         // Italic: *text*
-                        segments.push(...parseEmojisInText(match[4], { ...baseStyle, italics: true }));
-                    } else if (match[5]) {
+                        segments.push(...parseEmojisInText(match[7], { ...baseStyle, italics: true }));
+                    } else if (match[8]) {
                         // Inline code: `text`
                         segments.push({
-                            text: match[6],
+                            text: match[9],
                             font: 'Roboto',
                             ...baseStyle,
                             background: '#e8e8e8',
@@ -444,8 +509,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         };
 
-        // Generate and download PDF
-        pdfMake.createPdf(docDefinition).download(`${filename}.pdf`);
+        // Generate PDF as a blob and download it through Chrome downloads
+        const blob = await new Promise((resolve, reject) => {
+            try {
+                pdfMake.createPdf(docDefinition).getBlob(resolve);
+            } catch (error) {
+                reject(error);
+            }
+        });
+
+        await downloadBlob(blob, filename, 'pdf');
     }
 
     saveBtn.addEventListener('click', async () => {
@@ -456,13 +529,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-            if (!tab.url.includes('chatgpt.com') && !tab.url.includes('chat.openai.com')) {
+            if (!isChatGPTTab(tab)) {
                 showStatus('❌ Откройте страницу ChatGPT', 'error');
                 saveBtn.disabled = false;
                 return;
             }
 
-            const response = await chrome.tabs.sendMessage(tab.id, { action: 'extractMessages' });
+            const response = await sendMessageToContentScript(tab.id, { action: 'extractMessages' });
 
             if (response.error) {
                 showStatus(`❌ ${response.error}`, 'error');
@@ -476,7 +549,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
 
-            const filename = filenameInput.value.trim() || 'chatgpt_context';
+            const filename = sanitizeFilename(filenameInput.value);
             const format = formatSelect.value;
 
             showStatus('📄 Создание файла...', 'loading');

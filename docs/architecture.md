@@ -2,7 +2,7 @@
 
 ## Обзор
 
-**ChatGPT Context Saver** — Chrome-расширение на базе **Manifest V3**, состоящее из трёх основных слоёв: content script, popup UI и background service worker.
+**ChatGPT Context Saver** — Chrome-расширение на базе **Manifest V3**, состоящее из трёх слоёв: content script, popup UI и минимальный background service worker.
 
 ## Компоненты
 
@@ -20,17 +20,18 @@
 |------|-----------|
 | `popup.html` | Структура popup-окна (кнопка сохранения, выбор формата, поле имени файла) |
 | `popup.css` | Стили popup |
-| `popup.js` | Логика: запрос сообщений, форматирование, генерация PDF/TXT, скачивание |
+| `popup.js` | Логика: запрос сообщений, форматирование, генерация PDF/TXT/MD, скачивание через Chrome Downloads API |
 
 **Ключевые функции `popup.js`:**
 - `formatContent()` — форматирование в TXT/Markdown
+- `downloadBlob()` — единый запуск скачивания TXT/MD/PDF через `chrome.downloads.download`
 - `downloadAsPDF()` — генерация PDF через pdfmake с поддержкой эмодзи (Noto Emoji)
 - `textToSegments()` / `parseTextLines()` — парсинг Markdown → pdfmake-структуры
 - `transliterate()` / `buildFilename()` — генерация информативного имени файла
 
 ### `background/background.js` — Service Worker
 - Инициализация расширения (`chrome.runtime.onInstalled`)
-- Обработка скачивания файлов через `chrome.downloads.download`
+- Не участвует в основном export-flow; скачивание выполняет popup
 
 ### `lib/` — Внешние библиотеки
 | Файл | Назначение |
@@ -52,17 +53,15 @@
 │             │                              ▲
 │  Format +   │                              │
 │  Generate   │                         DOM страницы
-│  PDF/TXT    │                         ChatGPT
+│ PDF/TXT/MD  │                         ChatGPT
 │             │
-│             │    downloadFile        ┌──────────────┐
-│             │ ───────────────────▶   │  Background  │
-│             │                        │background.js │
-└─────────────┘                        └──────────────┘
-                                            │
-                                     chrome.downloads
-                                            │
-                                            ▼
-                                       Файл на диске
+│  Download   │
+│  via Chrome │
+│  Downloads  │
+└─────────────┘
+       │
+       ▼
+  Файл на диске
 ```
 
 ## Chrome API
@@ -70,14 +69,15 @@
 | API | Где используется | Назначение |
 |-----|-----------------|-----------|
 | `chrome.tabs.query` | popup.js | Получение активной вкладки |
-| `chrome.scripting.executeScript` | popup.js | Внедрение content script |
-| `chrome.runtime.onMessage` | content.js, background.js | Межкомпонентное общение |
-| `chrome.downloads.download` | background.js | Скачивание файлов |
+| `chrome.tabs.sendMessage` | popup.js | Запрос данных у content script |
+| `chrome.scripting.executeScript` | popup.js | Fallback-внедрение content script в уже открытую вкладку ChatGPT |
+| `chrome.runtime.onMessage` | content.js | Обработка запросов от popup |
+| `chrome.downloads.download` | popup.js | Скачивание файлов |
 
 ## Правила архитектуры
 
 1. **Без фреймворков** — только vanilla JS, без сборщиков
-2. **Manifest V3** — service worker вместо background page
+2. **Manifest V3** — service worker используется только для фоновых lifecycle-задач
 3. **Библиотеки** — хранятся локально в `lib/`, не подгружаются с CDN
 4. **Изоляция** — content script работает в IIFE для предотвращения конфликтов с DOM страницы
-5. **Async messaging** — все межкомпонентные сообщения асинхронны (`return true` в listener)
+5. **Async messaging** — запросы popup ↔ content script асинхронны (`return true` в listener)
