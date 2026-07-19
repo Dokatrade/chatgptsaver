@@ -2,7 +2,7 @@
     "manifest_version": 3,
     "name": "ChatGPT Context Saver",
     "version": "1.0.0",
-    "description": "Сохраняет контекст длинных бесед в ChatGPT в .txt файл для продолжения в новом чате",
+    "description": "Сохраняет длинные беседы ChatGPT в TXT, Markdown, PDF или EPUB для продолжения работы с контекстом",
     "permissions": [
         "activeTab",
         "downloads",
@@ -32,6 +32,7 @@
                 "https://chat.openai.com/*"
             ],
             "js": [
+                "content/extractor.js",
                 "content/content.js"
             ]
         }

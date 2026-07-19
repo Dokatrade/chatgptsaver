@@ -1,13 +1,13 @@
 {
-  "name": "chatgptcontext",
+  "name": "chatgpt-context-saver",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Chrome extension for exporting ChatGPT conversations to TXT, Markdown, PDF, or EPUB.",
   "directories": {
     "lib": "lib"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node scripts/check-project.js && node scripts/test-extractor.js && node scripts/test-epub.js",
+    "package": "node scripts/package-extension.js"
   },
   "keywords": [],
   "author": "",
@@ -16,5 +16,8 @@
   "dependencies": {
     "@fontsource/noto-emoji": "^5.2.11",
     "pdfmake": "^0.3.3"
+  },
+  "devDependencies": {
+    "jsdom": "^24.1.3"
   }
 }

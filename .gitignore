@@ -11,5 +11,17 @@ Thumbs.db
 # Настройки IDE
 .vscode/
 
+# Локальные файлы агентов
+.agents/
+.codex/
+
 # Временные файлы
 *.log
+*.tmp
+*.bak
+*.old
+commit_message.txt
+
+# Архивы и пакеты расширения
+*.zip
+*.crx

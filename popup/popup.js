@@ -42,7 +42,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function buildDownloadFilename(filename, extension) {
-        const baseName = sanitizeFilename(filename).replace(/\.(txt|md|pdf)$/i, '');
+        const baseName = sanitizeFilename(filename).replace(/\.(txt|md|pdf|epub)$/i, '');
         return `${baseName}.${extension}`;
     }
 
@@ -65,7 +65,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             await chrome.scripting.executeScript({
                 target: { tabId: tabId },
-                files: ['content/content.js']
+                files: ['content/extractor.js', 'content/content.js']
             });
 
             return chrome.tabs.sendMessage(tabId, message);
@@ -143,9 +143,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    function getTextMimeType(extension) {
+        return extension === 'md' ? 'text/markdown;charset=utf-8' : 'text/plain;charset=utf-8';
+    }
+
     async function downloadAsText(content, filename, extension) {
-        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const blob = new Blob([content], { type: getTextMimeType(extension) });
         await downloadBlob(blob, filename, extension);
+    }
+
+    async function downloadAsEPUB(messages, filename) {
+        const epub = window.ChatGPTContextSaverEpub;
+
+        if (!epub) {
+            throw new Error('EPUB generator is not loaded');
+        }
+
+        const blob = epub.createEpubBlob(messages, {
+            title: filename
+        });
+
+        await downloadBlob(blob, filename, 'epub');
     }
 
     function escapeHtml(text) {
@@ -556,6 +574,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (format === 'pdf') {
                 await downloadAsPDF(response.messages, filename);
+            } else if (format === 'epub') {
+                await downloadAsEPUB(response.messages, filename);
             } else {
                 const content = formatContent(response.messages, format);
                 await downloadAsText(content, filename, format);

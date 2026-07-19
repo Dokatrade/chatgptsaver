@@ -57,10 +57,10 @@
 ### Создание архива
 
 ```bash
-# Упаковать без лишних файлов
-# Windows (PowerShell):
-Compress-Archive -Path manifest.json, background, content, popup, icons, lib -DestinationPath chatgptsaver.zip
+npm run package
 ```
+
+Команда создаёт `chatgptsaver.zip` из runtime-файлов расширения: `manifest.json`, `background/`, `content/`, `popup/`, `icons/`, `lib/`.
 
 ### Не включать в архив
 
@@ -81,10 +81,12 @@ chatgptsaver.zip
 ├── background/
 │   └── background.js
 ├── content/
+│   ├── extractor.js
 │   └── content.js
 ├── popup/
 │   ├── popup.html
 │   ├── popup.css
+│   ├── epub.js
 │   └── popup.js
 ├── icons/
 │   ├── icon16.png
